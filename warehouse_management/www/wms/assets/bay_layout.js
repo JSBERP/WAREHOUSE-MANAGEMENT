@@ -49,11 +49,12 @@
     },
     {
       unit: "COMMON",
-      company: "Shared bays",
+      company: "",
       color: "#6366f1",
       machine: "none",
+      plain: true,
       bays: ["JC", "TC"],
-      blocks: [{ cols: ["X"], rows: ["JC", "TC"] }]
+      blocks: []
     }
   ];
 
@@ -221,16 +222,42 @@
     return j.jsx("div", { children: rowsOut });
   }
 
+  function plainArea(j, rack) {
+    var title = rack === "JC" ? "Jayashree Common" : "Thusmaa Common";
+    return j.jsxs("div", {
+      title: title,
+      style: {
+        width: 240,
+        height: 130,
+        border: "1px dashed #94a3b8",
+        background: "#f8fafc",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexDirection: "column",
+        gap: 4,
+        color: "#334155"
+      },
+      children: [
+        j.jsx("div", { style: { fontWeight: 800, fontSize: 18 }, children: rack }),
+        j.jsx("div", { style: { fontSize: 11, color: "#64748b" }, children: title })
+      ]
+    }, rack);
+  }
+
   function renderFloor(j, ctx) {
     return j.jsx("div", {
       style: { padding: 24, background: "#f8fafc", display: "flex", flexWrap: "wrap", gap: 20, justifyContent: "center", minHeight: 600 },
       children: ctx.units.map(function (unit) {
-        var body = [];
-        if (unit.machine === "top") body.push(machineNode(j));
-        var row = [];
-        if (unit.machine === "left") row.push(machineNode(j));
-        if (unit.unit === "UNIT 3") {
-          row.push(j.jsxs("div", {
+        var heading = unit.unit === "COMMON" ? "COMMON" : unit.unit + " — " + unit.company + "  ·  open 3D";
+        var body;
+        if (unit.plain) {
+          body = j.jsx("div", {
+            style: { display: "flex", flexDirection: "column", gap: 16, alignItems: "center" },
+            children: unit.bays.map(function (rack) { return plainArea(j, rack); })
+          });
+        } else if (unit.unit === "UNIT 3") {
+          body = j.jsxs("div", {
             style: { display: "flex", flexDirection: "column", gap: 16, alignItems: "center" },
             children: [
               blockTable(j, unit.blocks[0], ctx),
@@ -240,25 +267,40 @@
               ]}),
               blockTable(j, unit.blocks[2], ctx)
             ]
-          }));
+          });
+        } else if (unit.machine === "top") {
+          body = j.jsxs("div", {
+            style: { display: "flex", flexDirection: "column", gap: 18, alignItems: "center", width: "100%" },
+            children: [
+              machineNode(j),
+              j.jsx("div", {
+                style: { display: "flex", gap: 28, alignItems: "flex-start", justifyContent: "center" },
+                children: unit.blocks.map(function (block, idx) {
+                  return j.jsx("div", { children: blockTable(j, block, ctx) }, idx);
+                })
+              })
+            ]
+          });
         } else {
+          var row = [];
+          if (unit.machine === "left") row.push(machineNode(j));
           row.push(j.jsx("div", {
             style: { display: "flex", gap: 28, alignItems: "flex-start" },
             children: unit.blocks.map(function (block, idx) {
               return j.jsx("div", { children: blockTable(j, block, ctx) }, idx);
             })
-          }));
+          }, "racks"));
+          body = j.jsx("div", { style: { display: "flex", gap: 24, alignItems: "center" }, children: row });
         }
-        body.push(j.jsx("div", { style: { display: "flex", gap: 24, alignItems: "center" }, children: row }));
         return j.jsxs("div", {
-          style: { border: "1px solid #e2e8f0", background: "#fff", borderRadius: 8, padding: 16, paddingTop: 36, position: "relative", boxShadow: "0 1px 2px rgba(0,0,0,.04)" },
+          style: { border: "1px solid #e2e8f0", background: "#fff", borderRadius: 8, padding: 16, boxShadow: "0 1px 2px rgba(0,0,0,.04)" },
           children: [
-            j.jsxs("button", {
-              onClick: function () { ctx.setSelected("UNIT::" + unit.unit); },
-              style: { position: "absolute", top: 8, left: 12, border: 0, background: "transparent", color: unit.color, fontSize: 12, fontWeight: 800, cursor: "pointer" },
-              children: [unit.unit, " — ", unit.company, "  ·  open 3D"]
+            j.jsx("button", {
+              onClick: function () { if (!unit.plain) ctx.setSelected("UNIT::" + unit.unit); },
+              style: { display: "block", width: "100%", marginBottom: 14, border: 0, background: "transparent", color: unit.color, fontSize: 12, fontWeight: 800, cursor: unit.plain ? "default" : "pointer", textAlign: "center", whiteSpace: "nowrap" },
+              children: heading
             }),
-            j.jsx("div", { children: body })
+            body
           ]
         }, unit.unit);
       })
