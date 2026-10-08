@@ -324,49 +324,214 @@
     }, "machine");
   }
 
-  function sceneFloor(j, unit, ctx) {
-    var tables = unit.blocks.map(function (block, idx) {
-      return j.jsx("div", {
-        children: blockTable(j, block, { counts: ctx.counts, selected: null, setSelected: ctx.setSelected })
-      }, idx);
-    });
-    var machine = j.jsx("div", {
+  var SCENE_X = 56;
+  var SCENE_Z = -18;
+
+  function levelCount(counts, rack, pos, level) {
+    var rackData = counts && counts.get ? counts.get(rack) : null;
+    var bucket = rackData && rackData[level] && rackData[level][pos];
+    return bucket ? bucket.length : 0;
+  }
+
+  function face(j, style, children, key) {
+    return j.jsx("div", {
+      style: Object.assign({ position: "absolute", transformStyle: "preserve-3d" }, style),
+      children: children || null
+    }, key);
+  }
+
+  function slab(j, spec) {
+    var w = spec.w;
+    var d = spec.d;
+    var h = spec.h;
+    return j.jsxs("div", {
       style: {
-        width: 140, height: 140, background: "#1e293b", border: "2px solid #38bdf8",
-        display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800,
-        boxShadow: "0 18px 0 #020617", flexShrink: 0
+        position: "absolute",
+        left: spec.x || 0,
+        top: spec.y || 0,
+        width: w,
+        height: d,
+        transformStyle: "preserve-3d",
+        transform: "translateZ(" + (spec.z || 0) + "px)"
       },
-      children: "Machine"
+      children: [
+        face(j, { left: 0, top: 0, width: w, height: d, background: spec.top, border: "1px solid rgba(255,255,255,.28)", transform: "translateZ(" + h + "px)" }, null, "top"),
+        face(j, {
+          left: 0, top: d, width: w, height: h, background: spec.front,
+          transformOrigin: "left top", transform: "rotateX(-90deg)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "#f8fafc", fontWeight: 800, fontSize: 11, letterSpacing: 0.4
+        }, spec.label || null, "front"),
+        face(j, {
+          left: w, top: 0, width: h, height: d, background: spec.side,
+          transformOrigin: "left top", transform: "rotateY(-90deg)"
+        }, null, "side")
+      ]
+    }, spec.key || "slab");
+  }
+
+  function machine3d(j) {
+    return j.jsxs("div", {
+      style: { position: "relative", width: 168, height: 96, transformStyle: "preserve-3d", flexShrink: 0 },
+      children: [
+        face(j, {
+          left: 8, top: 18, width: 150, height: 62,
+          background: "radial-gradient(ellipse at center, rgba(0,0,0,.55) 0%, rgba(0,0,0,0) 72%)",
+          transform: "translateZ(-6px)"
+        }, null, "shadow"),
+        slab(j, { key: "base", x: 0, y: 8, z: 0, w: 168, d: 78, h: 12, top: "#334155", front: "#1e293b", side: "#0f172a" }),
+        slab(j, { key: "body", x: 28, y: 18, z: 12, w: 96, d: 52, h: 46, top: "#7dd3fc", front: "#0284c7", side: "#075985", label: "MACHINE" }),
+        slab(j, { key: "hopper", x: 52, y: 28, z: 58, w: 40, d: 30, h: 26, top: "#fde68a", front: "#d97706", side: "#b45309" }),
+        slab(j, { key: "feed", x: 8, y: 30, z: 12, w: 22, d: 34, h: 28, top: "#cbd5e1", front: "#64748b", side: "#475569" }),
+        slab(j, { key: "winder", x: 124, y: 22, z: 12, w: 32, d: 44, h: 36, top: "#e2e8f0", front: "#94a3b8", side: "#64748b" }),
+        slab(j, { key: "roll1", x: 36, y: 70, z: 14, w: 18, d: 14, h: 14, top: "#f8fafc", front: "#cbd5e1", side: "#94a3b8" }),
+        slab(j, { key: "roll2", x: 58, y: 70, z: 14, w: 18, d: 14, h: 14, top: "#f8fafc", front: "#cbd5e1", side: "#94a3b8" }),
+        slab(j, { key: "roll3", x: 80, y: 70, z: 14, w: 18, d: 14, h: 14, top: "#f8fafc", front: "#cbd5e1", side: "#94a3b8" })
+      ]
     });
+  }
+
+  function rack3d(j, rack, positions, ctx) {
+    var cell = 28;
+    var depth = 26;
+    var postH = 58;
+    var w = Math.max(positions.length, 1) * cell;
+    var levels = ["L1", "L2", "L3"];
+    var posts = [
+      { left: -4, top: -4 },
+      { left: w - 3, top: -4 },
+      { left: -4, top: depth - 3 },
+      { left: w - 3, top: depth - 3 }
+    ].map(function (corner, idx) {
+      return j.jsx("div", {
+        style: Object.assign({ position: "absolute", width: 6, height: 6, background: "#334155", transformStyle: "preserve-3d" }, corner),
+        children: j.jsx("div", {
+          style: {
+            position: "absolute", width: 6, height: postH,
+            background: "linear-gradient(90deg,#cbd5e1,#475569)",
+            transformOrigin: "top left",
+            transform: "rotateX(-90deg) translateY(-" + postH + "px)",
+            boxShadow: "1px 0 0 #0f172a"
+          }
+        })
+      }, "post" + idx);
+    });
+    var shelves = levels.map(function (level, idx) {
+      var z = 8 + idx * 18;
+      return j.jsx("div", {
+        style: {
+          position: "absolute", left: 0, top: 0, width: w, height: depth,
+          transform: "translateZ(" + z + "px)",
+          transformStyle: "preserve-3d",
+          display: "flex",
+          background: "rgba(15,23,42,.72)",
+          border: "1px solid #64748b",
+          boxShadow: "inset 0 0 8px rgba(0,0,0,.35)"
+        },
+        children: positions.map(function (pos) {
+          var count = levelCount(ctx.counts, rack, pos, level);
+          var look = paint(count, false);
+          return j.jsxs("div", {
+            style: {
+              flex: 1,
+              background: count ? look.background : "rgba(30,41,59,.35)",
+              borderRight: "1px solid rgba(148,163,184,.45)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: count ? look.color : "#cbd5e1",
+              fontSize: 8,
+              fontWeight: 800
+            },
+            children: [idx === 2 ? pos : "", count ? j.jsx("span", { style: { marginLeft: 2 }, children: String(count) }) : null]
+          }, rack + pos + level);
+        })
+      }, level);
+    });
+    return j.jsxs("div", {
+      onClick: function () { ctx.setSelected(rack); },
+      title: rack,
+      style: { position: "relative", width: w, height: depth, transformStyle: "preserve-3d", cursor: "pointer" },
+      children: posts.concat(shelves).concat([
+        j.jsx("div", {
+          style: {
+            position: "absolute",
+            left: "50%",
+            top: depth + 8,
+            transform: "translateX(-50%) rotateZ(" + (-SCENE_Z) + "deg) rotateX(" + (-SCENE_X) + "deg)",
+            transformOrigin: "center center",
+            color: "#f8fafc",
+            fontWeight: 800,
+            fontSize: 12,
+            letterSpacing: 0.6,
+            whiteSpace: "nowrap",
+            textShadow: "0 2px 6px rgba(0,0,0,.9)"
+          },
+          children: rack
+        }, "name")
+      ])
+    }, rack);
+  }
+
+  function sign3d(j, label) {
+    return j.jsx("div", {
+      style: { position: "relative", width: 72, height: 18, transformStyle: "preserve-3d", margin: "4px 0" },
+      children: slab(j, {
+        key: label, x: 0, y: 0, z: 0, w: 72, d: 18, h: 16,
+        top: "#e2e8f0", front: "#f8fafc", side: "#cbd5e1", label: label
+      })
+    }, label);
+  }
+
+  function blockRacks(j, block, ctx) {
+    var names = block.rackCols || block.rows || [];
+    var positions = block.rackCols ? block.posRows : block.cols;
+    var parts = [];
+    (block.before || []).forEach(function (label) { parts.push(sign3d(j, label)); });
+    names.forEach(function (rack) { parts.push(rack3d(j, rack, positions, ctx)); });
+    (block.after || []).forEach(function (label) { parts.push(sign3d(j, label)); });
+    return j.jsx("div", {
+      style: { display: "flex", flexDirection: "column", gap: 18, alignItems: "center", transformStyle: "preserve-3d" },
+      children: parts
+    });
+  }
+
+  function sceneFloor(j, unit, ctx) {
+    var groups = (unit.blocks || []).map(function (block, idx) {
+      return j.jsx("div", { style: { transformStyle: "preserve-3d" }, children: blockRacks(j, block, ctx) }, idx);
+    });
+    var machine = machine3d(j);
+    var stage = { display: "flex", gap: 42, alignItems: "center", transformStyle: "preserve-3d" };
     if (unit.unit === "UNIT 3") {
-      return j.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 22, alignItems: "center" }, children: [
-        tables[0],
-        j.jsxs("div", { style: { display: "flex", gap: 28, alignItems: "center" }, children: [machine, tables[1]] }),
-        tables[2]
+      return j.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 28, alignItems: "center", transformStyle: "preserve-3d" }, children: [
+        groups[0],
+        j.jsxs("div", { style: stage, children: [machine, groups[1]] }),
+        groups[2]
       ]});
     }
     if (unit.machine === "left") {
-      return j.jsxs("div", { style: { display: "flex", gap: 36, alignItems: "center" }, children: [machine, tables] });
+      return j.jsxs("div", { style: stage, children: [machine, groups] });
     }
     if (unit.machine === "top") {
-      return j.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 22, alignItems: "center" }, children: [
+      return j.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 34, alignItems: "center", transformStyle: "preserve-3d" }, children: [
         machine,
-        j.jsx("div", { style: { display: "flex", gap: 36 }, children: tables })
+        j.jsx("div", { style: { display: "flex", gap: 36, alignItems: "flex-start", transformStyle: "preserve-3d" }, children: groups })
       ]});
     }
-    return j.jsx("div", { style: { display: "flex", gap: 36 }, children: tables });
+    return j.jsx("div", { style: stage, children: groups });
   }
 
   function renderUnit3D(j, ctx) {
     var unit = (ctx.units || []).filter(function (u) { return u.unit === ctx.unitId; })[0];
     if (!unit) return j.jsx("div", { children: "Unknown unit" });
+    var scale = (unit.bays || []).length > 16 ? 0.72 : 1;
     return j.jsxs("div", {
       style: { padding: 16, background: "#0f172a", minHeight: 640, color: "#e2e8f0" },
       children: [
         j.jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }, children: [
           j.jsxs("div", { children: [
             j.jsx("div", { style: { fontWeight: 800, fontSize: 18 }, children: unit.unit + " floor" }),
-            j.jsx("div", { style: { fontSize: 12, color: "#94a3b8" }, children: "Machine and bays. Click a bay to open that rack." })
+            j.jsx("div", { style: { fontSize: 12, color: "#94a3b8" }, children: "Click a rack to open that bay." })
           ]}),
           j.jsx("button", {
             onClick: function () { ctx.setSelected(null); },
@@ -375,10 +540,27 @@
           })
         ]}),
         j.jsx("div", {
-          style: { perspective: "1400px", minHeight: 560, display: "flex", alignItems: "center", justifyContent: "center", overflow: "auto" },
+          style: { minHeight: 560, overflow: "auto" },
           children: j.jsx("div", {
-            style: { transform: "rotateX(58deg) rotateZ(-18deg)", transformStyle: "preserve-3d" },
-            children: sceneFloor(j, unit, ctx)
+            style: { perspective: "1600px", minHeight: 620, display: "flex", alignItems: "center", justifyContent: "center", padding: "48px 24px" },
+            children: j.jsxs("div", {
+              style: {
+                position: "relative",
+                transform: "rotateX(" + SCENE_X + "deg) rotateZ(" + SCENE_Z + "deg) scale(" + scale + ")",
+                transformStyle: "preserve-3d"
+              },
+              children: [
+                j.jsx("div", {
+                  style: {
+                    position: "absolute", left: "50%", top: "50%", width: 980, height: 720,
+                    marginLeft: -490, marginTop: -360,
+                    background: "radial-gradient(ellipse at center, rgba(51,65,85,.45) 0%, rgba(15,23,42,0) 68%)",
+                    transform: "translateZ(-16px)", pointerEvents: "none"
+                  }
+                }),
+                sceneFloor(j, unit, ctx)
+              ]
+            })
           })
         })
       ]
